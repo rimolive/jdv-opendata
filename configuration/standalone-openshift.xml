@@ -15,7 +15,7 @@
         <extension module="org.jboss.as.jsf"/>
         <extension module="org.jboss.as.logging"/>
         <extension module="org.jboss.as.mail"/>
-        <extension module="org.jboss.as.messaging"/>
+        <!-- ##MESSAGING_EXTENSION -->
         <extension module="org.jboss.as.naming"/>
         <extension module="org.jboss.as.pojo"/>
         <extension module="org.jboss.as.remoting"/>
@@ -69,7 +69,7 @@
             <native-interface security-realm="ManagementRealm">
                 <socket-binding native="management-native"/>
             </native-interface>
-            <http-interface security-realm="ManagementRealm">
+            <http-interface console-enabled="false">
                 <socket-binding http="management-http"/>
             </http-interface>
         </management-interfaces>
@@ -118,7 +118,7 @@
             <root-logger>
                 <level name="INFO"/>
                 <handlers>
-                    <handler name="ASYNC"/>
+                    <handler name="CONSOLE"/>
                 </handlers>
             </root-logger>
             <formatter name="OPENSHIFT">
@@ -141,6 +141,16 @@
                     <security>
                         <user-name>redhat</user-name>
                         <password>redhat@123</password>
+                    </security>
+                </datasource>
+                <datasource jndi-name="java:/datasources/ModeShapeDS" pool-name="ModeShapeDS" enabled="true" use-java-context="true">
+                    <connection-url>jdbc:jcr:jndi:jcr?repositoryName=dv</connection-url>
+                    <connection-property name="teiidsupport">
+                        true
+                    </connection-property>
+                    <driver>modeshape</driver>
+                    <security>
+                        <security-domain>encrypted-modeshape</security-domain>
                     </security>
                 </datasource>
 
@@ -170,7 +180,7 @@
             </datasources>
         </subsystem>
         <subsystem xmlns="urn:jboss:domain:deployment-scanner:1.1">
-            <deployment-scanner path="deployments" relative-to="jboss.server.base.dir" scan-interval="5000" auto-deploy-exploded="false"/> 
+            <deployment-scanner path="deployments" relative-to="jboss.server.base.dir" scan-interval="5000" auto-deploy-exploded="##AUTO_DEPLOY_EXPLODED##"/> 
         </subsystem>
         <subsystem xmlns="urn:jboss:domain:ee:1.2">
             <spec-descriptor-property-replacement>false</spec-descriptor-property-replacement>
@@ -205,7 +215,7 @@
                 <cluster-passivation-store name="infinispan" cache-container="ejb"/>
             </passivation-stores>
             <async thread-pool-name="default"/>
-                        <timer-service thread-pool-name="default" default-data-store="default-file-store">                <data-stores>                    <file-data-store name="default-file-store" path="timer-service-data" relative-to="jboss.server.data.dir"/>                    <!-- ##DATASTORES## -->                </data-stores>            </timer-service>
+            <!-- ##TIMER_SERVICE## -->
             <remote connector-ref="remoting-connector" thread-pool-name="default"/>
             <thread-pools>
                 <thread-pool name="default">
@@ -325,17 +335,11 @@
                 <protocol type="FD_SOCK" socket-binding="jgroups-udp-fd"/>
                 <protocol type="FD"/>
                 <protocol type="VERIFY_SUSPECT"/>
-                
+                <!-- ##JGROUPS_ENCRYPT## -->
                 <protocol type="pbcast.NAKACK"/>
                 <protocol type="UNICAST2"/>
                 <protocol type="pbcast.STABLE"/>
-                
-                <protocol type="AUTH">
-                    <property name="auth_class">org.jgroups.auth.MD5Token</property>
-                    <property name="token_hash">SHA</property>
-                    <property name="auth_value">teiidUser</property>
-                </protocol>
-
+                <!-- ##JGROUPS_AUTH## -->
                 <protocol type="pbcast.GMS"/>
                 <protocol type="UFC"/>
                 <protocol type="MFC"/>
@@ -383,113 +387,7 @@
                 <smtp-server outbound-socket-binding-ref="mail-smtp"/>
             </mail-session>
         </subsystem>
-                <subsystem xmlns="urn:jboss:domain:messaging:1.4">
-            <hornetq-server>
-                <cluster-password>${jboss.messaging.cluster.password:CHANGE ME!!}</cluster-password>
-                <persistence-enabled>true</persistence-enabled>
-                <journal-type>NIO</journal-type>
-                <journal-min-files>2</journal-min-files>
-                <connectors>
-                    <netty-connector name="netty" socket-binding="messaging"/>
-                    <netty-connector name="netty-throughput" socket-binding="messaging-throughput">
-                        <param key="batch-delay" value="50"/>
-                    </netty-connector>
-                    <in-vm-connector name="in-vm" server-id="0"/>
-                </connectors>
-                <acceptors>
-                    <netty-acceptor name="netty" socket-binding="messaging"/>
-                    <netty-acceptor name="netty-throughput" socket-binding="messaging-throughput">
-                        <param key="batch-delay" value="50"/>
-                        <param key="direct-deliver" value="false"/>
-                    </netty-acceptor>
-                    <in-vm-acceptor name="in-vm" server-id="0"/>
-                </acceptors>
-                <broadcast-groups>
-                    <broadcast-group name="bg-group1">
-                        <jgroups-stack>tcp</jgroups-stack>
-                        <jgroups-channel>hornetq-channel</jgroups-channel>
-                        <broadcast-period>5000</broadcast-period>
-                        <connector-ref>netty</connector-ref>
-                    </broadcast-group>
-                </broadcast-groups>
-                <discovery-groups>
-                    <discovery-group name="dg-group1">
-                        <jgroups-stack>tcp</jgroups-stack>
-                        <jgroups-channel>hornetq-channel</jgroups-channel>
-                        <refresh-timeout>10000</refresh-timeout>
-                    </discovery-group>
-                </discovery-groups>
-                <cluster-connections>
-                    <cluster-connection name="my-cluster">
-                        <address>jms</address>
-                        <connector-ref>netty</connector-ref>
-                        <discovery-group-ref discovery-group-name="dg-group1"/>
-                    </cluster-connection>
-                </cluster-connections>
-                <security-settings>
-                    <security-setting match="#">
-                        <permission type="send" roles="guest"/>
-                        <permission type="consume" roles="guest"/>
-                        <permission type="createNonDurableQueue" roles="guest"/>
-                        <permission type="deleteNonDurableQueue" roles="guest"/>
-                    </security-setting>
-                </security-settings>
-                <address-settings>
-                    <!--default for catch all-->
-                    <address-setting match="#">
-                        <dead-letter-address>jms.queue.DLQ</dead-letter-address>
-                        <expiry-address>jms.queue.ExpiryQueue</expiry-address>
-                        <redelivery-delay>0</redelivery-delay>
-                        <redistribution-delay>1000</redistribution-delay>
-                        <max-size-bytes>10485760</max-size-bytes>
-                        <address-full-policy>PAGE</address-full-policy>
-                        <page-size-bytes>2097152</page-size-bytes>
-                        <message-counter-history-day-limit>10</message-counter-history-day-limit>
-                    </address-setting>
-                </address-settings>
-                <jms-connection-factories>
-                    <connection-factory name="InVmConnectionFactory">
-                        <connectors>
-                            <connector-ref connector-name="in-vm"/>
-                        </connectors>
-                        <entries>
-                            <entry name="java:/ConnectionFactory"/>
-                        </entries>
-                    </connection-factory>
-                    <connection-factory name="RemoteConnectionFactory">
-                        <connectors>
-                            <connector-ref connector-name="netty"/>
-                        </connectors>
-                        <entries>
-                            <entry name="java:jboss/exported/jms/RemoteConnectionFactory"/>
-                        </entries>
-                        <ha>true</ha>
-                        <block-on-acknowledge>true</block-on-acknowledge>
-                        <retry-interval>1000</retry-interval>
-                        <retry-interval-multiplier>1.0</retry-interval-multiplier>
-                        <reconnect-attempts>-1</reconnect-attempts>
-                    </connection-factory>
-                    <pooled-connection-factory name="hornetq-ra">
-                        <transaction mode="xa"/>
-                        <connectors>
-                            <connector-ref connector-name="in-vm"/>
-                        </connectors>
-                        <entries>
-                            <entry name="java:/JmsXA"/>
-                        </entries>
-                    </pooled-connection-factory>
-                </jms-connection-factories>
-                <jms-destinations>
-                    <jms-queue name="ExpiryQueue">
-                        <entry name="java:/jms/queue/ExpiryQueue"/>
-                    </jms-queue>
-                    <jms-queue name="DLQ">
-                        <entry name="java:/jms/queue/DLQ"/>
-                    </jms-queue>
-                    
-                </jms-destinations>
-            </hornetq-server>
-        </subsystem>
+        <!-- ##MESSAGING_SUBSYSTEM## -->
         <subsystem xmlns="urn:jboss:domain:naming:1.4">
             <remote-naming/>
         </subsystem>
@@ -512,16 +410,27 @@
                 <resource-adapter id="salesforce">
                     <module slot="main" id="org.jboss.teiid.resource-adapter.salesforce"/>
                 </resource-adapter>
+                <resource-adapter id="salesforce-34">
+                    <module slot="main" id="org.jboss.teiid.resource-adapter.salesforce-34"/>
+                </resource-adapter>
                 <resource-adapter id="webservice">
                     <module slot="main" id="org.jboss.teiid.resource-adapter.webservice"/>
                 </resource-adapter>
                 <resource-adapter id="mongodb">
                     <module slot="main" id="org.jboss.teiid.resource-adapter.mongodb"/>
                 </resource-adapter>
+                <resource-adapter id="cassandra">
+                    <module slot="main" id="org.jboss.teiid.resource-adapter.cassandra"/>
+                </resource-adapter>
+                <resource-adapter id="simpledb">
+                    <module slot="main" id="org.jboss.teiid.resource-adapter.simpledb"/>
+                </resource-adapter>
                 <resource-adapter id="accumulo">
                     <module slot="main" id="org.jboss.teiid.resource-adapter.accumulo"/>
                 </resource-adapter>
-
+                <resource-adapter id="solr">
+                    <module slot="main" id="org.jboss.teiid.resource-adapter.solr"/>
+                </resource-adapter>
                 <resource-adapter id="CNPJSource">
                     <module slot="main" id="org.jboss.teiid.resource-adapter.file"/>
                     <transaction-support>NoTransaction</transaction-support>
@@ -602,8 +511,8 @@
                 <security-domain name="encrypted-modeshape">
                     <authentication>
                         <login-module code="org.picketbox.datasource.security.SecureIdentityLoginModule" flag="required">
-                            <module-option name="username" value="rCXkUq1u"/>
-                            <module-option name="password" value="-b233085842987ed108c379bf2aa8f76"/>
+                            <module-option name="username" value="##MODESHAPE_USERNAME##"/>
+                            <module-option name="password" value="##MODESHAPE_PASSWORD##"/>
                         </login-module>
                     </authentication>
                 </security-domain>
@@ -664,8 +573,6 @@
                 </sequencers>
             </repository>
             <webapp name="modeshape-rest.war"/>
-            <webapp name="modeshape-webdav.war"/>
-            <webapp name="modeshape-cmis.war"/>
         </subsystem>
         <subsystem xmlns="urn:jboss:domain:teiid:1.0">
             <async-thread-pool>teiid-async</async-thread-pool>
@@ -700,6 +607,7 @@
             <translator name="greenplum" module="org.jboss.teiid.translator.jdbc"/>
             <translator name="sqlserver" module="org.jboss.teiid.translator.jdbc"/>
             <translator name="sybase" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="sybaseiq" module="org.jboss.teiid.translator.jdbc"/>
             <translator name="teiid" module="org.jboss.teiid.translator.jdbc"/>
             <translator name="teradata" module="org.jboss.teiid.translator.jdbc"/>
             <translator name="modeshape" module="org.jboss.teiid.translator.jdbc"/>
@@ -713,6 +621,7 @@
             <translator name="olap" module="org.jboss.teiid.translator.olap"/>
             <translator name="ws" module="org.jboss.teiid.translator.ws"/>
             <translator name="salesforce" module="org.jboss.teiid.translator.salesforce"/>
+            <translator name="salesforce-34" module="org.jboss.teiid.translator.salesforce" slot="34"/>
             <translator name="hive" module="org.jboss.teiid.translator.hive"/>
             <translator name="google-spreadsheet" module="org.jboss.teiid.translator.google"/>
             <translator name="odata" module="org.jboss.teiid.translator.odata"/>
@@ -723,8 +632,17 @@
             <translator name="solr" module="org.jboss.teiid.translator.solr"/>
             <translator name="excel" module="org.jboss.teiid.translator.excel"/>
             <translator name="impala" module="org.jboss.teiid.translator.hive"/>
+             <translator name="prestodb" module="org.jboss.teiid.translator.prestodb"/>
             <translator name="hbase" module="org.jboss.teiid.translator.hbase"/>
             <translator name="hana" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="vertica" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="actian-vector" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="osisoft-pi" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="odata4" module="org.jboss.teiid.translator.odata4"/>
+            <translator name="redshift" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="jpa2" module="org.jboss.teiid.translator.jpa"/>
+            <translator name="ucanaccess" module="org.jboss.teiid.translator.jdbc"/>
+            <translator name="simpledb" module="org.jboss.teiid.translator.simpledb"/>
             
             <translator name="infinispan-cache-dsl" module="org.jboss.teiid.translator.infinispan.dsl"/>
             <translator name="infinispan-cache" module="org.jboss.teiid.translator.infinispan.cache"/>
@@ -762,7 +680,7 @@
         <socket-binding name="jgroups-tcp-fd" port="57600"/>
         <socket-binding name="jgroups-udp" port="55200" multicast-address="${jboss.default.multicast.address:230.0.0.4}" multicast-port="45688"/>
         <socket-binding name="jgroups-udp-fd" port="54200"/>
-        <socket-binding name="messaging" port="5445"/><socket-binding name="messaging-throughput" port="5455"/>
+        <!-- ##MESSAGING_PORTS## -->
         <socket-binding name="remoting" port="4447"/>
         <socket-binding name="teiid-jdbc" port="31000" interface="any"/>
         <socket-binding name="secure-teiid-jdbc" port="31443" interface="any"/>
@@ -773,17 +691,5 @@
             <remote-destination host="localhost" port="25"/>
         </outbound-socket-binding>
     </socket-binding-group>
-
-    <deployments>
-        <deployment name="ModeShape.vdb" runtime-name="ModeShape.vdb">
-            <fs-exploded path="dataVirtualization/vdb/ModeShape.vdb/" relative-to="jboss.home.dir"/>
-        </deployment>
-        <deployment name="teiid-odata.war" runtime-name="teiid-odata.war">
-            <fs-exploded path="dataVirtualization/vdb/teiid-odata.war/" relative-to="jboss.home.dir"/>
-        </deployment>
-        <deployment name="teiid-olingo-odata4.war" runtime-name="teiid-olingo-odata4.war">
-            <fs-exploded path="dataVirtualization/vdb/teiid-olingo-odata4.war/" relative-to="jboss.home.dir"/>
-        </deployment>
-    </deployments>
 
 </server>
